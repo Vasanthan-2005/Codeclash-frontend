@@ -1,12 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
 import axios from 'axios';
 // Monaco Editor import (assume monaco is installed)
 import Editor from '@monaco-editor/react';
 import ErrorAlert from '../components/ErrorAlert';
-
-const socket = io('http://localhost:5000');
+import socket from '../socket';
 
 export default function MatchRoom() {
   const { roomCode } = useParams();
