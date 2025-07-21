@@ -40,3 +40,16 @@
 .read-the-docs {
   color: #888;
 }
+
+.split-gutter {
+  background: linear-gradient(90deg, #23232a 0%, #3b3b4f 100%);
+  width: 12px;
+  cursor: col-resize;
+  border-radius: 8px;
+  box-shadow: 0 0 8px #0004;
+  margin: 0 2px;
+  transition: background 0.2s;
+}
+.split-gutter:hover {
+  background: linear-gradient(90deg, #3b82f6 0%, #6366f1 100%);
+}

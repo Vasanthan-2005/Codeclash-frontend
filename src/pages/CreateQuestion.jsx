@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import ErrorAlert from '../components/ErrorAlert';
@@ -74,6 +74,14 @@ export default function CreateQuestion({ onCreated, modalMode }) {
   const [loading, setLoading] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const navigate = useNavigate();
+  const [isGlobal, setIsGlobal] = useState(false); // For admin: global or personal
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    const u = localStorage.getItem('user');
+    if (u) setUser(JSON.parse(u));
+    // Default to global for admin, personal for others
+    if (u && JSON.parse(u).role === 'admin') setIsGlobal(true);
+  }, []);
 
   // Tag selection
   const handleTagChange = (tag) => {
@@ -125,7 +133,7 @@ export default function CreateQuestion({ onCreated, modalMode }) {
       // Ensure starterCode has all languages
       const fullStarterCode = { ...starterCode };
       LANGUAGES.forEach(lang => { if (!fullStarterCode[lang]) fullStarterCode[lang] = ''; });
-      const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/questions`, {
+      const payload = {
         title,
         difficulty,
         tags,
@@ -140,7 +148,9 @@ export default function CreateQuestion({ onCreated, modalMode }) {
         notes,
         status: publish ? 'published' : 'draft',
         testCases,
-      }, {
+      };
+      if (user && user.role === 'admin') payload.isGlobal = isGlobal;
+      const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/questions`, payload, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
@@ -186,6 +196,27 @@ export default function CreateQuestion({ onCreated, modalMode }) {
     <div className={modalMode ? 'max-h-[70vh] overflow-y-auto text-white' : 'min-h-screen flex flex-col items-center justify-center bg-gray-950 text-white py-10'}>
       <div className={modalMode ? 'bg-gray-900 p-6 rounded-xl border border-gray-800 w-full max-w-2xl mx-auto mb-4' : 'w-full max-w-3xl p-8 bg-gray-900 rounded-xl shadow-xl border border-gray-800'}>
         <h2 className="text-2xl font-bold mb-6 text-blue-200">Create a New Question</h2>
+        {/* Admin: Global/Personal Toggle */}
+        {user && user.role === 'admin' && (
+          <div className="mb-4">
+            <label className="font-semibold text-blue-100">Question Bank</label>
+            <div className="flex gap-4 mt-1">
+              <label className="flex items-center gap-2">
+                <input type="radio" name="isGlobal" checked={isGlobal} onChange={() => setIsGlobal(true)} />
+                Admin (Global)
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="radio" name="isGlobal" checked={!isGlobal} onChange={() => setIsGlobal(false)} />
+                Personal
+              </label>
+            </div>
+          </div>
+        )}
+        <div className="mb-2 text-xs text-gray-400">
+          {user && user.role === 'admin'
+            ? (isGlobal ? 'This question will be added to the global (admin) bank.' : 'This question will be added to your personal bank.')
+            : 'This question will be added to your personal bank.'}
+        </div>
         {/* Preview Modal */}
         {showPreviewModal && <QuestionPreviewModal question={previewData} onClose={() => setShowPreviewModal(false)} />}
         <form onSubmit={e => { e.preventDefault(); handleSubmit(false); }} className="space-y-6">

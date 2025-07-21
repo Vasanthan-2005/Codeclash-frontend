@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import CreateQuestion from './CreateQuestion';
 import ErrorAlert from '../components/ErrorAlert';
+import MatchSettingsCard from '../components/MatchSettingsCard';
+import QuestionSourceTabs from '../components/QuestionSourceTabs';
+import SelectedQuestionsList from '../components/SelectedQuestionsList';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const LANGUAGES = [
   { label: 'C', value: 'c' },
@@ -12,6 +16,7 @@ const LANGUAGES = [
 ];
 
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+const DIFFICULTY_KEYS = ['easy', 'medium', 'hard'];
 const CATEGORIES = ['DSA', 'SQL', 'Web', 'Other'];
 
 // QuestionPreviewModal component
@@ -78,6 +83,8 @@ export default function CreateMatch() {
   const [questionSearch, setQuestionSearch] = useState('');
   const [questionFilters, setQuestionFilters] = useState({ difficulty: '', category: '', tags: [] });
   const [previewQuestion, setPreviewQuestion] = useState(null);
+  const [questionSource, setQuestionSource] = useState('custom'); // 'custom' or 'random'
+  const [randomCounts, setRandomCounts] = useState({ easy: 0, medium: 0, hard: 0 });
   const navigate = useNavigate();
 
   // Fetch question bank
@@ -131,7 +138,11 @@ export default function CreateMatch() {
     if (!maxPlayers || maxPlayers < 2) return 'At least 2 players required.';
     if (!timeLimit || timeLimit < 1) return 'Time limit required.';
     if (!languages.length) return 'Select at least one language.';
-    if (questions.length !== Number(numQuestions)) return `You must add exactly ${numQuestions} question(s).`;
+    if (questionSource === 'custom' && questions.length !== Number(numQuestions)) return `You must add exactly ${numQuestions} question(s).`;
+    if (questionSource === 'random') {
+      const total = randomCounts.easy + randomCounts.medium + randomCounts.hard;
+      if (total !== Number(numQuestions)) return `Total random questions must equal ${numQuestions}.`;
+    }
     return '';
   };
 
@@ -147,26 +158,31 @@ export default function CreateMatch() {
       return;
     }
     try {
-      // 1. POST only new questions
-      const questionIds = [];
-      for (const q of questions) {
-        if (isNewQuestion(q)) {
-          const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/questions`, q, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-          });
-          questionIds.push(res.data._id);
-        } else {
-          questionIds.push(q._id);
-        }
-      }
-      // 2. Create match in backend
-      const matchRes = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/matches/create`, {
+      let matchPayload = {
         roomName,
-        questions: questionIds,
         timeLimit,
         maxPlayers,
         languages,
-      }, {
+      };
+      if (questionSource === 'custom') {
+        // 1. POST only new questions
+        const questionIds = [];
+        for (const q of questions) {
+          if (isNewQuestion(q)) {
+            const res = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/questions`, q, {
+              headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+            });
+            questionIds.push(res.data._id);
+          } else {
+            questionIds.push(q._id);
+          }
+        }
+        matchPayload.questions = questionIds;
+      } else if (questionSource === 'random') {
+        matchPayload.randomQuestions = { ...randomCounts };
+      }
+      // 2. Create match in backend
+      const matchRes = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/matches/create`, matchPayload, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
@@ -197,77 +213,55 @@ export default function CreateMatch() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-950 text-white py-10">
-      <div className="w-full max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="w-full max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Left: Room Info & Settings */}
         <div className="space-y-6">
-          <div className="bg-gray-900 rounded-xl shadow-xl border border-gray-800 p-6">
-            <h2 className="text-xl font-bold mb-4 text-blue-200">Room Info</h2>
-            <div className="mb-4">
-              <label className="block font-semibold mb-1 text-blue-100">Room Name</label>
-              <input type="text" className="w-full border border-gray-700 bg-gray-800 text-white px-3 py-2 rounded" value={roomName} onChange={e => setRoomName(e.target.value)} required />
+          <MatchSettingsCard
+            roomName={roomName}
+            setRoomName={setRoomName}
+            numQuestions={numQuestions}
+            setNumQuestions={setNumQuestions}
+            maxPlayers={maxPlayers}
+            setMaxPlayers={setMaxPlayers}
+            timeLimit={timeLimit}
+            setTimeLimit={setTimeLimit}
+            languages={languages}
+            setLanguages={setLanguages}
+          />
+          <QuestionSourceTabs
+            questionSource={questionSource}
+            setQuestionSource={setQuestionSource}
+            randomCounts={randomCounts}
+            setRandomCounts={setRandomCounts}
+            numQuestions={numQuestions}
+          />
+          <button type="submit" className="w-full bg-blue-600 text-white px-6 py-3 rounded-xl border border-blue-700 font-bold text-lg mt-4 shadow-lg" disabled={loading || (questionSource === 'custom' && questions.length !== Number(numQuestions))} onClick={handleSubmit}>{loading ? <LoadingSpinner className="h-6" /> : 'Create Match'}</button>
+          {error && <div className="text-red-400 mt-2">{error}</div>}
+          {success && <div className="text-green-400 mt-2">{success}</div>}
+          {roomCode && (
+            <div className="text-center mt-6">
+              <div className="text-lg font-semibold mb-2 text-blue-100">Room Code:</div>
+              <div className="text-3xl font-mono bg-gray-800 p-4 rounded mb-4 text-blue-300 border border-gray-700 inline-block">{roomCode}</div>
+              <button
+                className="ml-2 bg-yellow-600 hover:bg-yellow-700 text-black px-4 py-2 rounded font-semibold border border-yellow-700 transition-colors"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(roomCode);
+                  navigate(`/lobby/${roomCode}`);
+                }}
+              >
+                Copy & Join Lobby
+              </button>
             </div>
-            <div className="mb-4">
-              <label className="block font-semibold mb-1 text-blue-100">Number of Questions</label>
-              <input type="number" min={1} max={10} className="w-24 border border-gray-700 bg-gray-800 text-white px-2 py-1 rounded" value={numQuestions} onChange={e => setNumQuestions(Number(e.target.value))} required />
-            </div>
-            <div className="mb-4">
-              <label className="block font-semibold mb-1 text-blue-100">Maximum Players</label>
-              <input type="number" min={2} max={100} className="w-24 border border-gray-700 bg-gray-800 text-white px-2 py-1 rounded" value={maxPlayers} onChange={e => setMaxPlayers(Number(e.target.value))} required />
-            </div>
-            <div className="mb-4">
-              <label className="block font-semibold mb-1 text-blue-100">Time Limit (minutes)</label>
-              <input type="number" min={1} max={180} className="w-24 border border-gray-700 bg-gray-800 text-white px-2 py-1 rounded" value={timeLimit} onChange={e => setTimeLimit(Number(e.target.value))} required />
-            </div>
-            <div>
-              <label className="block font-semibold mb-1 text-blue-100">Allowed Languages</label>
-              <div className="flex gap-4 flex-wrap">
-                {LANGUAGES.map(lang => (
-                  <label key={lang.value} className="flex items-center gap-1 text-gray-200">
-                    <input type="checkbox" checked={languages.includes(lang.value)} onChange={() => setLanguages(prev => prev.includes(lang.value) ? prev.filter(l => l !== lang.value) : [...prev, lang.value])} /> {lang.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div>
-            <button type="submit" className="w-full bg-blue-600 text-white px-6 py-3 rounded-xl border border-blue-700 font-bold text-lg mt-4 shadow-lg" disabled={loading || questions.length !== Number(numQuestions)} onClick={handleSubmit}>{loading ? 'Creating...' : 'Create Match'}</button>
-            {error && <div className="text-red-400 mt-2">{error}</div>}
-            {success && <div className="text-green-400 mt-2">{success}</div>}
-            {roomCode && (
-              <div className="text-center mt-6">
-                <div className="text-lg font-semibold mb-2 text-blue-100">Room Code:</div>
-                <div className="text-3xl font-mono bg-gray-800 p-4 rounded mb-4 text-blue-300 border border-gray-700 inline-block">{roomCode}</div>
-                <button
-                  className="ml-2 bg-yellow-600 hover:bg-yellow-700 text-black px-4 py-2 rounded font-semibold border border-yellow-700 transition-colors"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(roomCode);
-                    navigate(`/lobby/${roomCode}`);
-                  }}
-                >
-                  Copy & Join Lobby
-                </button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
         {/* Right: Add Questions */}
-        <div className="bg-gray-900 rounded-xl shadow-xl border border-gray-800 p-6 flex flex-col">
-          <h2 className="text-xl font-bold mb-4 text-blue-200">Add Questions</h2>
-          <button type="button" className="bg-blue-600 text-white px-4 py-2 rounded border border-blue-700 font-semibold mb-4 self-start" onClick={() => setShowQuestionModal(true)} disabled={questions.length >= numQuestions}>+ Add Questions</button>
-          <div className="space-y-2 flex-1 overflow-y-auto">
-            {questions.map((q, idx) => (
-              <div key={q._id || idx} className="bg-gray-950 border border-gray-800 rounded p-3 flex flex-col mb-2">
-                <div className="font-bold text-lg text-white mb-1">{q.title}</div>
-                <div className="text-sm text-blue-200 mb-1">{q.difficulty} | {q.category} | {q.tags?.join(', ')}</div>
-                <div className="flex gap-2 mt-1 self-end">
-                  <button type="button" className="text-blue-400 text-xs underline" onClick={() => setPreviewQuestion(q)}>Preview</button>
-                  <button type="button" className="text-red-400 text-xs" onClick={() => removeSelectedQuestion(idx)}>Remove</button>
-                </div>
-              </div>
-            ))}
-            {questions.length === 0 && <div className="text-gray-400">No questions added yet.</div>}
+        {questionSource === 'custom' && (
+          <div className="bg-gray-900 rounded-xl shadow-xl border border-gray-800 p-6 flex flex-col">
+            <h2 className="text-xl font-bold mb-4 text-blue-200">Add Questions</h2>
+            <button type="button" className="bg-blue-600 text-white px-4 py-2 rounded border border-blue-700 font-semibold mb-4 self-start" onClick={() => setShowQuestionModal(true)} disabled={questions.length >= numQuestions}>+ Add Questions</button>
+            <SelectedQuestionsList questions={questions} onRemove={removeSelectedQuestion} onPreview={setPreviewQuestion} />
           </div>
-        </div>
+        )}
         {/* Question Modal */}
         {showQuestionModal && (
           <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">

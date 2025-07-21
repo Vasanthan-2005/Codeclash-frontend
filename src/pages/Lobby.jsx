@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import socket from '../socket'; // Use a singleton socket instance
 import ErrorAlert from '../components/ErrorAlert';
+import axios from 'axios';
 
 const EMOJIS = ['😀','😂','😍','😎','😭','😡','👍','🎉','🔥','❤️','🙏','🤔','😅','🥳','😇','😜'];
 
@@ -23,6 +24,9 @@ export default function Lobby() {
   const [closeConfirm, setCloseConfirm] = useState(false);
   const [closeCountdown, setCloseCountdown] = useState(5);
   const [error, setError] = useState('');
+  const [matchDetails, setMatchDetails] = useState(null);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({ roomName: '', maxPlayers: 2, timeLimit: 15, languages: '', questions: 1 });
 
   useEffect(() => {
     const u = JSON.parse(localStorage.getItem('user'));
@@ -79,6 +83,41 @@ export default function Lobby() {
       setRoomClosed(false);
     };
   }, [roomCode, navigate]);
+
+  useEffect(() => {
+    // Fetch match details
+    const fetchMatchDetails = async () => {
+      try {
+        const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/matches/full/bycode/${roomCode}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+        setMatchDetails(res.data);
+        setSettingsForm({
+          roomName: res.data.roomName || '',
+          maxPlayers: res.data.maxPlayers || 2,
+          timeLimit: res.data.timeLimit || 15,
+          languages: (res.data.languages || []).join(', '),
+          questions: (res.data.questions || []).length || 1,
+        });
+      } catch (err) {
+        setMatchDetails(null);
+      }
+    };
+    fetchMatchDetails();
+    // Listen for settings update
+    socket.on('lobby:updateSettings', ({ settings }) => {
+      setMatchDetails(prev => ({ ...prev, ...settings }));
+      setSettingsForm(f => ({
+        ...f,
+        ...settings,
+        languages: Array.isArray(settings.languages) ? settings.languages.join(', ') : settings.languages,
+        questions: Array.isArray(settings.questions) ? settings.questions.length : settings.questions,
+      }));
+    });
+    return () => {
+      socket.off('lobby:updateSettings');
+    };
+  }, [roomCode]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -143,6 +182,28 @@ export default function Lobby() {
   const hostPlayer = players.find(p => (p._id === (hostId?._id || hostId)));
   const otherPlayers = players.filter(p => p._id !== (hostId?._id || hostId));
 
+  // Host: handle settings update
+  const handleSettingsChange = e => {
+    const { name, value } = e.target;
+    setSettingsForm(f => ({ ...f, [name]: value }));
+  };
+  const handleSettingsSubmit = async e => {
+    e.preventDefault();
+    try {
+      await axios.patch(`${import.meta.env.VITE_API_BASE_URL}/api/matches/${roomCode}/settings`, {
+        roomName: settingsForm.roomName,
+        maxPlayers: Number(settingsForm.maxPlayers),
+        languages: settingsForm.languages.split(',').map(l => l.trim()).filter(Boolean),
+        // questions: settingsForm.questions, // Optionally allow changing questions
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      setShowSettingsModal(false);
+    } catch (err) {
+      alert('Failed to update settings');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center py-10">
       <ErrorAlert message={error} />
@@ -152,6 +213,17 @@ export default function Lobby() {
             <h2 className="text-2xl font-bold text-blue-200">Match Lobby</h2>
             <div className="text-gray-400 mt-1">Room Code: <span className="font-mono text-lg bg-gray-800 px-2 py-1 rounded text-blue-300">{roomCode}</span></div>
             {user && <h2 className="text-blue-100">{user.username}</h2>}
+            {/* Room Details */}
+            {matchDetails && (
+              <div className="mt-2 text-sm text-gray-300 space-y-1">
+                <div><span className="font-semibold">Room Name:</span> {matchDetails.roomName}</div>
+                <div><span className="font-semibold">Host:</span> {matchDetails.admin?.username}</div>
+                <div><span className="font-semibold">Max Players:</span> {matchDetails.maxPlayers}</div>
+                <div><span className="font-semibold">Time Limit:</span> {matchDetails.timeLimit ? matchDetails.timeLimit + ' min' : 'N/A'}</div>
+                <div><span className="font-semibold">Questions:</span> {Array.isArray(matchDetails.questions) ? matchDetails.questions.length : matchDetails.questions}</div>
+                <div><span className="font-semibold">Languages:</span> {(matchDetails.languages || []).join(', ')}</div>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-gray-400">Players:</span>
@@ -159,6 +231,13 @@ export default function Lobby() {
             <button className="ml-4 bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded border border-gray-700" onClick={handleLeave} disabled={countdown !== null}>Leave Room</button>
             {user && user._id === (hostId?._id || hostId) && (
               <>
+                <button
+                  className="ml-2 bg-yellow-600 hover:bg-yellow-700 text-black px-3 py-1 rounded border border-yellow-700 font-semibold"
+                  onClick={() => setShowSettingsModal(true)}
+                  disabled={countdown !== null}
+                >
+                  Edit Settings
+                </button>
                 <button
                   className="ml-2 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded border border-red-700"
                   onClick={handleCloseRoom}
@@ -219,7 +298,7 @@ export default function Lobby() {
             </div>
             <form onSubmit={handleSend} className="flex gap-2">
               <input type="text" className="flex-1 border border-gray-700 bg-gray-900 text-white px-2 py-1 rounded" value={message} onChange={e => setMessage(e.target.value)} placeholder="Type a message..." />
-              <button type="button" className="bg-gray-700 text-white px-2 py-1 rounded font-semibold border border-gray-700" onClick={()=>setShowEmojis(e=>!e)}>60a</button>
+              <button type="button" className="bg-gray-700 text-white px-2 py-1 rounded font-semibold border border-gray-700" onClick={()=>setShowEmojis(e=>!e)}> 60a</button>
               <button type="submit" className="bg-blue-600 text-white px-4 py-1 rounded font-semibold border border-blue-700">Send</button>
             </form>
             {showEmojis && (
@@ -284,6 +363,33 @@ export default function Lobby() {
             </button>
             <h2 className="text-4xl font-bold text-red-300 mb-4 animate-pulse">Room Closed</h2>
             <div className="text-lg text-red-200">The host has closed the room.<br/>You will be redirected to the dashboard.</div>
+          </div>
+        </div>
+      )}
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-60">
+          <div className="bg-gray-900 rounded-xl p-8 shadow-2xl border-4 border-blue-600 w-full max-w-md">
+            <h2 className="text-2xl font-bold text-blue-200 mb-4">Edit Match Settings</h2>
+            <form onSubmit={handleSettingsSubmit} className="space-y-4">
+              <div>
+                <label className="block text-gray-300 mb-1">Room Name</label>
+                <input type="text" name="roomName" value={settingsForm.roomName} onChange={handleSettingsChange} className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white" />
+              </div>
+              <div>
+                <label className="block text-gray-300 mb-1">Max Players</label>
+                <input type="number" name="maxPlayers" min="2" max="20" value={settingsForm.maxPlayers} onChange={handleSettingsChange} className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white" />
+              </div>
+              <div>
+                <label className="block text-gray-300 mb-1">Languages (comma separated)</label>
+                <input type="text" name="languages" value={settingsForm.languages} onChange={handleSettingsChange} className="w-full px-3 py-2 rounded bg-gray-800 border border-gray-700 text-white" />
+              </div>
+              {/* Optionally add timeLimit and questions fields here if you want to allow editing */}
+              <div className="flex justify-end gap-2 mt-6">
+                <button type="button" className="px-4 py-2 bg-gray-700 text-white rounded" onClick={() => setShowSettingsModal(false)}>Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-semibold">Save</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

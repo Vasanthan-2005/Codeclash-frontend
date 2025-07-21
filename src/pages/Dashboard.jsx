@@ -24,6 +24,7 @@ import {
   Star
 } from 'lucide-react';
 import ErrorAlert from '../components/ErrorAlert';
+import NewFollowersTab from '../components/NewFollowersTab';
 
 const statIcons = {
   matches: <PlayCircle className="w-6 h-6 text-blue-400" />,
@@ -40,6 +41,9 @@ export default function Dashboard() {
   const [matchesLoading, setMatchesLoading] = useState(true);
   const [followers, setFollowers] = useState(0);
   const [following, setFollowing] = useState(0);
+  const [followingUsers, setFollowingUsers] = useState([]);
+  const [followersUsers, setFollowersUsers] = useState([]);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -63,10 +67,14 @@ export default function Dashboard() {
           headers: { Authorization: `Bearer ${token}` },
         });
         setFollowers(followersRes.data.length);
+        setFollowersUsers(followersRes.data);
         const followingRes = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/users/${userRes.data._id}/following`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setFollowing(followingRes.data.length);
+        setFollowingUsers(followingRes.data);
+        
+
         // Matches
         const matchesRes = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/matches/history`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -208,10 +216,10 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               <button 
                 className="flex items-center gap-2 px-4 py-2 border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors text-gray-300 hover:text-white"
-                onClick={() => navigate('/leaderboard')}
+                onClick={() => navigate('/search-players')}
               >
-                <BarChart3 className="w-4 h-4" />
-                Leaderboard
+                <Users className="w-4 h-4" />
+                Search Players
               </button>
               <button 
                 className="flex items-center gap-2 px-4 py-2 border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors text-gray-300 hover:text-white"
@@ -248,6 +256,8 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+
 
         {/* Secondary Stats */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -398,6 +408,106 @@ export default function Dashboard() {
             </table>
           </div>
         </div>
+
+        {/* Following Section */}
+        <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden mt-8">
+          <div className="px-6 py-4 border-b border-gray-800">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white">Following ({following})</h3>
+              <button 
+                className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 font-medium text-sm"
+                onClick={() => navigate('/search-players')}
+              >
+                Find More Players
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            {followingUsers.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400 mb-4">You're not following anyone yet</p>
+                <button 
+                  onClick={() => navigate('/search-players')}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors mx-auto"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Find Players to Follow
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {followingUsers.slice(0, 6).map((user) => (
+                  <div key={user._id} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors">
+                    <img 
+                      src={user.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face&auto=format'} 
+                      alt={user.username} 
+                      className="w-10 h-10 rounded-full object-cover border-2 border-gray-600"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-medium text-white truncate">{user.username}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Trophy className="w-3 h-3 text-yellow-400" />
+                        <span className="text-xs text-gray-400">{user.winCount || 0} wins</span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => navigate(`/profile/${user._id}`)}
+                      className="p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-colors"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Followers Section */}
+        <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden mt-8">
+          <div className="px-6 py-4 border-b border-gray-800">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white">Followers ({followers})</h3>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            {followersUsers.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                <p className="text-gray-400">No followers yet. Start playing matches to get noticed!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {followersUsers.slice(0, 6).map((user) => (
+                  <div key={user._id} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors">
+                    <img 
+                      src={user.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face&auto=format'} 
+                      alt={user.username} 
+                      className="w-10 h-10 rounded-full object-cover border-2 border-gray-600"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-medium text-white truncate">{user.username}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Trophy className="w-3 h-3 text-yellow-400" />
+                        <span className="text-xs text-gray-400">{user.winCount || 0} wins</span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => navigate(`/profile/${user._id}`)}
+                      className="p-1 text-gray-400 hover:text-white hover:bg-gray-600 rounded transition-colors"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </main>
 
       {/* Loading/Error Overlay */}
@@ -421,6 +531,9 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      
+      {/* New Followers Tab */}
+      <NewFollowersTab />
     </div>
   );
 }

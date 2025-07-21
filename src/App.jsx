@@ -13,6 +13,10 @@ import MatchRoom from './pages/MatchRoom';
 import JoinMatch from './pages/JoinMatch';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminQuestionBank from './pages/AdminQuestionBank';
+import SearchPlayers from './pages/SearchPlayers';
+import OAuthHandler from './pages/OAuthHandler';
+import CompleteProfile from './pages/CompleteProfile';
 
 export default function App() {
   return (
@@ -34,6 +38,10 @@ export default function App() {
             <Route path="/join-match" element={<JoinMatch />} />
             <Route path="/admin-login" element={<AdminLogin />} />
             <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Route path="/admin-qb" element={<AdminQuestionBank />} />
+            <Route path="/search-players" element={<SearchPlayers />} />
+            <Route path="/oauth-handler" element={<OAuthHandler />} />
+            <Route path="/complete-profile" element={<CompleteProfile />} />
           </Routes>
         </div>
       </Router>

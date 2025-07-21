@@ -1,0 +1,16 @@
+.gutter {
+  background-color: #222;
+  background-clip: padding-box;
+  border-radius: 4px;
+  cursor: col-resize;
+  width: 8px;
+  min-width: 8px;
+  height: 100%;
+  transition: background 0.2s;
+}
+.gutter:hover {
+  background-color: #444;
+}
+.gutter-horizontal {
+  cursor: col-resize;
+} 

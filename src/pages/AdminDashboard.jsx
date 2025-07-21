@@ -153,6 +153,12 @@ export default function AdminDashboard() {
             <p className="text-gray-400 mt-2">Manage and monitor player activities</p>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/admin-qb')}
+              className="bg-gray-800 hover:bg-blue-700 text-blue-400 border border-blue-400 px-5 py-2 rounded-lg font-semibold shadow-md transition-all"
+            >
+              Manage Global Question Bank
+            </button>
             <div className="text-center">
               <div className="text-2xl font-bold text-green-400">{onlineUsers.size}</div>
               <div className="text-xs text-gray-400">Online</div>
@@ -434,23 +440,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(55, 65, 81, 0.5);
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(59, 130, 246, 0.5);
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(59, 130, 246, 0.7);
-        }
-      `}</style>
     </div>
   );
 } 
